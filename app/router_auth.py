@@ -71,3 +71,48 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         data={"sub": user.email, "role_id": user.role_id}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+
+@router.post("/google", response_model=Token)
+def google_login(payload: GoogleLoginRequest, db: Session = Depends(database.get_db)):
+    import urllib.request
+    import urllib.parse
+    import json
+
+    try:
+        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={urllib.parse.quote(payload.id_token)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode())
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to verify Google Token: {str(e)}"
+        )
+
+    email = res_data.get("email")
+    email_verified = res_data.get("email_verified")
+
+    if not email or (email_verified not in [True, "true"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google account email is not verified or could not be retrieved"
+        )
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"User with email '{email}' is not registered in the system database."
+        )
+
+    access_token_expires = timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = utils_jwt.create_access_token(
+        data={"sub": user.email, "role_id": user.role_id}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+

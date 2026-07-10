@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, Mail } from "lucide-react";
+
+import { getApiUrl } from "@/config";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,7 +23,7 @@ export default function LoginPage() {
       formData.append("username", email);
       formData.append("password", password);
 
-      const res = await fetch("http://localhost:8000/auth/login", {
+      const res = await fetch(getApiUrl("/auth/login"), {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -42,6 +44,73 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  const handleGoogleLogin = async (response: any) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(getApiUrl("/auth/google"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id_token: response.credential,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Google authentication failed");
+      }
+
+      const data = await res.json();
+      localStorage.setItem("token", data.access_token);
+      router.push("/dashboard");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Load the Google Identity Services library
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const google = (window as any).google;
+      if (google) {
+        // Initialize Google Sign-in
+        google.accounts.id.initialize({
+          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+          callback: handleGoogleLogin,
+        });
+        
+        // Render the Google Sign-in button
+        google.accounts.id.renderButton(
+          document.getElementById("google-signin-btn"),
+          { 
+            theme: "filled_blue", 
+            size: "large", 
+            width: "380", 
+            text: "signin_with",
+            shape: "pill"
+          }
+        );
+      }
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      // Cleanup script tag on unmount
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-indigo-950 px-4">
@@ -98,7 +167,22 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-indigo-400/20"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-3 bg-slate-900/40 backdrop-blur-lg rounded-full text-indigo-200">Or continue with</span>
+          </div>
+        </div>
+
+        <div className="flex justify-center w-full">
+          <div id="google-signin-btn" className="w-full flex justify-center min-h-[44px]"></div>
+        </div>
       </div>
     </div>
   );
 }
+
+
