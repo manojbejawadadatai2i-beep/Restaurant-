@@ -1,7 +1,9 @@
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends, HTTPException, status
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 from typing import List, Optional
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 from datetime import date, datetime
 
@@ -59,38 +61,6 @@ def revenue_metrics(
         "total_orders": total_orders,
         "records": len(sales),
     }
-
-class SaleCreate(BaseModel):
-    revenue: float
-    order_count: int
-    customer_count: int
-
-@router.post("/sales", response_model=SaleOut)
-def create_sale(
-    sale_in: SaleCreate,
-    db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(router_auth.get_current_active_user),
-):
-    if current_user.role_id != permissions.ROLE_STORE:
-        raise HTTPException(status_code=403, detail="Only store managers can submit sales")
-    
-    if not current_user.store_id:
-        raise HTTPException(status_code=400, detail="User is not assigned to a store")
-    
-    import uuid
-    new_sale = models.Sale(
-        sale_id=f"SA{uuid.uuid4().hex[:6].upper()}",
-        store_id=current_user.store_id,
-        revenue=sale_in.revenue,
-        order_count=sale_in.order_count,
-        customer_count=sale_in.customer_count,
-        sale_date=date.today(),
-        created_at=datetime.utcnow()
-    )
-    db.add(new_sale)
-    db.commit()
-    db.refresh(new_sale)
-    return new_sale
 
 # Store performance – aggregated per store (basic example)
 @router.get("/store/{store_id}")

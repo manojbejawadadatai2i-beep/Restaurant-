@@ -15,12 +15,8 @@ app = FastAPI(title="Restaurant Operations API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://10.10.3.100:3000",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -59,3 +55,8 @@ def test_db(db: Session = Depends(database.get_db)):
 def get_regions(db: Session = Depends(database.get_db)):
     regions = db.query(models.Region).all()
     return regions
+
+@app.get("/districts")
+def get_districts(db: Session = Depends(database.get_db)):
+    districts = db.query(models.District).all()
+    return districts

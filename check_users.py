@@ -19,7 +19,7 @@ def check_db():
         users = db.query(User).all()
         print(f"Found {len(users)} users in the database.")
         for u in users:
-            print(f"ID: {u.id}, Email: {u.email}, Name: {u.full_name}, PW Hash: {u.hashed_password}, Role ID: {u.role_id}")
+            print(f"ID: {u.user_id}, Email: {u.email}, Name: {u.full_name}, PW Hash: {u.hashed_password}, Role ID: {u.role_id}")
             
     except Exception as e:
         print("\n!!! ERROR connecting to DB or querying users !!!")

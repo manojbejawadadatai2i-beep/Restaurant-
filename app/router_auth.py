@@ -17,7 +17,7 @@ class UserCreate(BaseModel):
     email: str
     password: str
     full_name: str = ""
-    role_id: str = "RL04"
+    role_id: int = 4
 
 
 class Token(BaseModel):
@@ -48,6 +48,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 def get_current_active_user(current_user: models.User = Depends(get_current_user)):
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending admin approval"
+        )
     return current_user
 
 
@@ -66,9 +71,22 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending admin approval"
+        )
     access_token_expires = timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = utils_jwt.create_access_token(
-        data={"sub": user.email, "role_id": user.role_id}, expires_delta=access_token_expires
+        data={
+            "sub": user.email, 
+            "role_id": user.role_id,
+            "employee_id": user.employee_id,
+            "store_id": user.store_id,
+            "district_id": user.district_id,
+            "region_id": user.region_id
+        }, 
+        expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -109,10 +127,67 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(database.get
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"User with email '{email}' is not registered in the system database."
         )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account pending admin approval"
+        )
 
     access_token_expires = timedelta(minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = utils_jwt.create_access_token(
-        data={"sub": user.email, "role_id": user.role_id}, expires_delta=access_token_expires
+        data={
+            "sub": user.email, 
+            "role_id": user.role_id,
+            "employee_id": user.employee_id,
+            "store_id": user.store_id,
+            "district_id": user.district_id,
+            "region_id": user.region_id
+        }, 
+        expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/register")
+def register(user_in: UserCreate, db: Session = Depends(database.get_db)):
+    import uuid
+    import traceback
+    import bcrypt as _bc
+
+    # Check if user already exists
+    if db.query(models.User).filter(models.User.email == user_in.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # Hash password directly using bcrypt
+    try:
+        salt = _bc.gensalt()
+        hashed_bytes = _bc.hashpw(user_in.password.encode("utf-8"), salt)
+        hashed = hashed_bytes.decode("utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Password hashing failed: {e}\n{traceback.format_exc()}")
+
+    # Generate employee_id: "EMP" + 5 random hex chars
+    try:
+        emp_id = f"EMP{uuid.uuid4().hex[:5].upper()}"
+        db_user = models.User(
+            employee_id=emp_id,
+            full_name=user_in.full_name,
+            email=user_in.email,
+            hashed_password=hashed,
+            role_id=user_in.role_id,
+            corporate_id=1,
+            is_active=False  # pending admin approval
+        )
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Database error: {e}\n{traceback.format_exc()}")
+
+    return {
+        "message": "Registration successful! Your account is pending admin approval.",
+        "employee_id": db_user.employee_id,
+        "email": db_user.email,
+    }
 

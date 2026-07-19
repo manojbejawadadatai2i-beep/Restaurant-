@@ -12,6 +12,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+import { getApiUrl } from "@/config";
+
 interface Sale {
   sale_id: string;
   store_id: string;
@@ -29,7 +31,7 @@ export default function ReportsPage() {
     const fetchSales = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:8000/dashboard/sales", {
+        const res = await fetch(getApiUrl("/dashboard/sales"), {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {

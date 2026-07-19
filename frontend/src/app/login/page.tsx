@@ -32,7 +32,12 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Invalid email or password");
+        let errorMsg = "Invalid email or password";
+        try {
+          const errorData = await res.json();
+          if (errorData.detail) errorMsg = errorData.detail;
+        } catch (e) {}
+        throw new Error(errorMsg);
       }
 
       const data = await res.json();
@@ -88,14 +93,14 @@ export default function LoginPage() {
           client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
           callback: handleGoogleLogin,
         });
-        
+
         // Render the Google Sign-in button
         google.accounts.id.renderButton(
           document.getElementById("google-signin-btn"),
-          { 
-            theme: "filled_blue", 
-            size: "large", 
-            width: "380", 
+          {
+            theme: "filled_blue",
+            size: "large",
+            width: "380",
             text: "signin_with",
             shape: "pill"
           }
@@ -158,7 +163,7 @@ export default function LoginPage() {
               />
             </div>
           </div>
-          
+
           <button
             type="submit"
             disabled={loading}
@@ -180,6 +185,8 @@ export default function LoginPage() {
         <div className="flex justify-center w-full">
           <div id="google-signin-btn" className="w-full flex justify-center min-h-[44px]"></div>
         </div>
+
+
       </div>
     </div>
   );

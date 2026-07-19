@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { TrendingUp, Users, DollarSign, ArrowUpRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
+import { getApiUrl } from "@/config";
+
 const data = [
   { name: "Mon", revenue: 4000, customers: 240 },
   { name: "Tue", revenue: 3000, customers: 139 },
@@ -34,7 +36,7 @@ export default function DashboardOverview() {
           } catch (e) {}
         }
 
-        const res = await fetch("http://localhost:8000/dashboard/metrics", {
+        const res = await fetch(getApiUrl("/dashboard/metrics"), {
           headers: {
             "Authorization": `Bearer ${token}`
           }
@@ -69,7 +71,7 @@ export default function DashboardOverview() {
     setSubmitMessage("");
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:8000/dashboard/sales", {
+      const res = await fetch(getApiUrl("/dashboard/sales"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

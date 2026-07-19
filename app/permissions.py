@@ -4,22 +4,24 @@ from fastapi import HTTPException, status
 from sqlalchemy import text
 from typing import List
 
-# Role constants (must match DB values)
-ROLE_ADMIN = "RL01"
-ROLE_REGIONAL = "RL02"
-ROLE_DISTRICT = "RL03"
-ROLE_STORE = "RL04"
+# Role constants (must match DB integer values)
+ROLE_ADMIN = 1        # Corporate Administrator — sees everything
+ROLE_REGIONAL = 2     # Regional Manager
+ROLE_DISTRICT = 3     # District Manager
+ROLE_STORE = 4        # Store Manager
+ROLE_USERADD = 5      # User Admin — can only add/manage users
 
-# Mapping of role to human‑readable name
+# Mapping of role to human-readable name
 ROLE_LABELS = {
     ROLE_ADMIN: "Corporate Administrator",
     ROLE_REGIONAL: "Regional Manager",
     ROLE_DISTRICT: "District Manager",
     ROLE_STORE: "Store Manager",
+    ROLE_USERADD: "User Admin",
 }
 
 
-def require_role(user, allowed_roles: List[str]):
+def require_role(user, allowed_roles: List[int]):
     """Raise 403 if user.role_id not in allowed_roles."""
     if user.role_id not in allowed_roles:
         raise HTTPException(
@@ -29,26 +31,22 @@ def require_role(user, allowed_roles: List[str]):
 
 
 def scope_filter(user, query, model):
-    """Apply SQLAlchemy filter based on the caller's role.
-    Uses plain column comparisons – no ORM relationships required.
-    """
-    # Admin sees everything
-    if user.role_id == ROLE_ADMIN:
+    """Apply SQLAlchemy filter based on the caller's role."""
+    # Admin and User Admin see all users
+    if user.role_id in (ROLE_ADMIN, ROLE_USERADD):
         return query
 
     # Store manager – only their own store's records
     if user.role_id == ROLE_STORE:
         if hasattr(model, "store_id"):
             return query.filter(model.store_id == user.store_id)
-        # If model has no store_id (e.g. querying users), show only self
-        if hasattr(model, "user_id"):
-            return query.filter(model.user_id == user.user_id)
+        if hasattr(model, "id"):
+            return query.filter(model.id == user.id)
         return query.filter(False)
 
     # District manager – all stores in their district
     if user.role_id == ROLE_DISTRICT:
         if hasattr(model, "store_id"):
-            # Subquery: get store_ids in this district
             from . import database
             db = query.session
             store_ids = [
@@ -86,5 +84,5 @@ def scope_filter(user, query, model):
     return query.filter(False)
 
 
-def get_role_label(role_id: str) -> str:
-    return ROLE_LABELS.get(role_id, role_id)
+def get_role_label(role_id: int) -> str:
+    return ROLE_LABELS.get(role_id, str(role_id))

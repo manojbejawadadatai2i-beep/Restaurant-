@@ -5,16 +5,19 @@ from .database import Base
 
 class User(Base):
     __tablename__ = "users"
-    user_id = Column(String, primary_key=True)
-    role_id = Column(String, nullable=True)
-    region_id = Column(String, nullable=True)
-    district_id = Column(String, nullable=True)
-    store_id = Column(String, nullable=True)
-    full_name = Column(String, nullable=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column("password_hash", String, nullable=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    employee_id = Column(String(50), nullable=True)
+    full_name = Column(String(255), nullable=True)
+    email = Column(String(255), unique=True, index=True)
+    hashed_password = Column("password_hash", String(255), nullable=True)
+    google_id = Column(String(255), nullable=True)
+    role_id = Column(Integer, nullable=True)
+    corporate_id = Column(Integer, nullable=True)
+    region_id = Column(Integer, nullable=True)
+    district_id = Column(Integer, nullable=True)
+    store_id = Column(Integer, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, nullable=True)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Role(Base):

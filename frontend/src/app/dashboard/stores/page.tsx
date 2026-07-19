@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Store, MapPin, Search } from "lucide-react";
 
+import { getApiUrl } from "@/config";
+
 interface StoreData {
   store_id: string;
   store_name: string;
@@ -18,7 +20,7 @@ export default function StoresPage() {
     const fetchStores = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch("http://localhost:8000/stores/", {
+        const res = await fetch(getApiUrl("/stores/"), {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
