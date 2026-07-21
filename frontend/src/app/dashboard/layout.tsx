@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Store, PieChart, Users, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Store, PieChart, Users, Settings, LogOut, Brain } from "lucide-react";
 import Link from "next/link";
+import Chatbot from "@/components/Chatbot";
 
 // Role constants — match DB integer values
 const ROLE_ADMIN = 1;
@@ -35,6 +36,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
         const payload = JSON.parse(window.atob(base64));
+        if (payload.must_change_password) {
+          router.push("/change-password");
+          return;
+        }
         setRoleId(payload.role_id);
       } catch (e) {
         console.error("Invalid token");
@@ -104,6 +109,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="font-medium">Team</span>
             </Link>
           )}
+          {/* AI Insights — all roles except User Admin */}
+          {!isUserAdmin && (
+            <Link href="/dashboard/insights" className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 rounded-xl transition-colors">
+              <Brain className="w-5 h-5" />
+              <span className="font-medium">AI Insights</span>
+            </Link>
+          )}
         </nav>
 
         <div className="mt-auto space-y-2 pt-8 border-t border-slate-800">
@@ -130,6 +142,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex-1 overflow-auto p-8 z-10">
           {children}
         </div>
+        
+        {/* Chatbot Floating UI */}
+        <Chatbot />
       </main>
     </div>
   );

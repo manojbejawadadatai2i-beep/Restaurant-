@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-import { getApiUrl } from "@/config";
+import { getApiUrl } from "@/utils/config";
 
 interface Sale {
   sale_id: string;
@@ -25,18 +25,28 @@ interface Sale {
 
 export default function ReportsPage() {
   const [sales, setSales] = useState<Sale[]>([]);
+  const [storeNames, setStoreNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSales = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(getApiUrl("/dashboard/sales"), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const [res, storesRes] = await Promise.all([
+          fetch(getApiUrl("/dashboard/sales?limit=10000"), { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(getApiUrl("/stores?limit=1000"), { headers: { Authorization: `Bearer ${token}` } })
+        ]);
         if (res.ok) {
           const data = await res.json();
           setSales(data);
+        }
+        if (storesRes.ok) {
+          const storesData = await storesRes.json();
+          const mapping = storesData.reduce((acc: Record<string, string>, s: any) => {
+            acc[s.store_id] = s.store_name || s.store_id;
+            return acc;
+          }, {});
+          setStoreNames(mapping);
         }
       } catch (e) {
         console.error("Failed to fetch sales", e);
@@ -55,7 +65,8 @@ export default function ReportsPage() {
   const chartData = Object.values(
     sales.reduce((acc: Record<string, any>, s) => {
       const key = s.store_id;
-      if (!acc[key]) acc[key] = { store: key, revenue: 0, orders: 0 };
+      const displayName = storeNames[key] || key;
+      if (!acc[key]) acc[key] = { store: displayName, revenue: 0, orders: 0 };
       acc[key].revenue += Number(s.revenue) || 0;
       acc[key].orders += s.order_count || 0;
       return acc;
@@ -145,7 +156,7 @@ export default function ReportsPage() {
               {sales.slice(0, 10).map((s) => (
                 <tr key={s.sale_id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                   <td className="px-6 py-3 text-slate-400 font-mono text-xs">{s.sale_id}</td>
-                  <td className="px-6 py-3 text-white font-medium">{s.store_id}</td>
+                  <td className="px-6 py-3 text-white font-medium">{storeNames[s.store_id] || s.store_id}</td>
                   <td className="px-6 py-3 text-emerald-400 font-semibold">${Number(s.revenue).toLocaleString()}</td>
                   <td className="px-6 py-3 text-slate-300">{s.order_count}</td>
                   <td className="px-6 py-3 text-slate-300">{s.customer_count}</td>

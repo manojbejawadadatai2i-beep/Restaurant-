@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus, Mail, Lock, User, Briefcase } from "lucide-react";
 
-import { getApiUrl } from "@/config";
+import { getApiUrl } from "@/utils/config";
 
 export default function RegisterPage() {
   const router = useRouter();

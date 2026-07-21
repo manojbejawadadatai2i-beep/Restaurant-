@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, Mail } from "lucide-react";
 
-import { getApiUrl } from "@/config";
+import { getApiUrl } from "@/utils/config";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,7 +42,13 @@ export default function LoginPage() {
 
       const data = await res.json();
       localStorage.setItem("token", data.access_token);
-      router.push("/dashboard");
+      
+      const payload = JSON.parse(window.atob(data.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.must_change_password) {
+        router.push("/change-password");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -71,7 +77,13 @@ export default function LoginPage() {
 
       const data = await res.json();
       localStorage.setItem("token", data.access_token);
-      router.push("/dashboard");
+      
+      const payload = JSON.parse(window.atob(data.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.must_change_password) {
+        router.push("/change-password");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
