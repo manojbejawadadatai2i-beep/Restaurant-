@@ -2,3 +2,8 @@ fastapi
 uvicorn
 sqlalchemy
 pydantic
+groq
+psycopg2-binary
+bcrypt
+python-jose[cryptography]
+python-multipart

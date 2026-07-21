@@ -35,26 +35,78 @@ def get_llm_client():
         raise ValueError("GROQ_API_KEY is missing from .env.")
 
 def execute_get_sales_summary(user: models.User, db: Session, kwargs: dict):
-    # kwargs can contain period filters or group_by, but we keep it simple here
     query = db.query(
         func.sum(models.Sale.revenue).label("total_revenue"),
         func.sum(models.Sale.order_count).label("total_orders"),
+        func.sum(models.Sale.customer_count).label("total_customers")
     )
     query = permissions.scope_filter(user, query, models.Sale)
     
-    # We could parse start_date and end_date from kwargs if provided
-    start_date = kwargs.get("start_date")
-    end_date = kwargs.get("end_date")
+    import datetime
+    def parse_dt(d):
+        if not d: return None
+        try:
+            return datetime.datetime.strptime(str(d).strip()[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    start_date = parse_dt(kwargs.get("start_date"))
+    end_date = parse_dt(kwargs.get("end_date"))
+    
     if start_date:
         query = query.filter(models.Sale.sale_date >= start_date)
     if end_date:
         query = query.filter(models.Sale.sale_date <= end_date)
         
     result = query.first()
+    
+    avg_order_value = 0
+    if result.total_orders and result.total_revenue:
+        avg_order_value = float(result.total_revenue) / int(result.total_orders)
+        
     return {
         "total_revenue": float(result.total_revenue or 0),
-        "total_orders": int(result.total_orders or 0)
+        "total_orders": int(result.total_orders or 0),
+        "total_customers": int(result.total_customers or 0),
+        "average_order_value": round(avg_order_value, 2),
+        "period_start": str(start_date) if start_date else "All time",
+        "period_end": str(end_date) if end_date else "All time"
     }
+
+def execute_get_daily_sales_trend(user: models.User, db: Session, kwargs: dict):
+    query = db.query(
+        models.Sale.sale_date,
+        func.sum(models.Sale.revenue).label("total_revenue"),
+        func.sum(models.Sale.order_count).label("total_orders")
+    )
+    query = permissions.scope_filter(user, query, models.Sale)
+    
+    import datetime
+    def parse_dt(d):
+        if not d: return None
+        try:
+            return datetime.datetime.strptime(str(d).strip()[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    start_date = parse_dt(kwargs.get("start_date"))
+    end_date = parse_dt(kwargs.get("end_date"))
+    
+    if start_date:
+        query = query.filter(models.Sale.sale_date >= start_date)
+    if end_date:
+        query = query.filter(models.Sale.sale_date <= end_date)
+        
+    query = query.group_by(models.Sale.sale_date).order_by(models.Sale.sale_date.asc())
+    results = query.all()
+    
+    return [
+        {
+            "date": str(r.sale_date),
+            "revenue": float(r.total_revenue or 0),
+            "orders": int(r.total_orders or 0)
+        } for r in results
+    ]
 
 def execute_get_store_performance(user: models.User, db: Session, kwargs: dict):
     limit = min(int(kwargs.get("limit", 10)), 50)
@@ -130,28 +182,41 @@ def execute_get_specific_store_performance(user: models.User, db: Session, kwarg
     query = db.query(
         models.Store.store_id,
         models.Store.store_name,
+        models.Store.city,
+        models.Store.manager_name,
+        models.Store.status,
         func.sum(models.Sale.revenue).label("total_revenue"),
-        func.sum(models.Sale.order_count).label("total_orders")
+        func.sum(models.Sale.order_count).label("total_orders"),
+        func.sum(models.Sale.customer_count).label("total_customers")
     ).outerjoin(models.Sale, models.Store.store_id == models.Sale.store_id)
     
     query = permissions.scope_filter(user, query, models.Store)
     
     query_by_id = query.filter(models.Store.store_id == store_identifier)
-    result = query_by_id.group_by(models.Store.store_id, models.Store.store_name).first()
+    result = query_by_id.group_by(models.Store.store_id, models.Store.store_name, models.Store.city, models.Store.manager_name, models.Store.status).first()
     
     if not result:
         # Try finding by name (e.g. "Store 6")
         query_by_name = query.filter(func.lower(models.Store.store_name).like(f"%{store_identifier.lower()}%"))
-        result = query_by_name.group_by(models.Store.store_id, models.Store.store_name).first()
+        result = query_by_name.group_by(models.Store.store_id, models.Store.store_name, models.Store.city, models.Store.manager_name, models.Store.status).first()
         
     if not result:
         return {"error": f"No KPI data found for {store_identifier} or you do not have permission to access it."}
         
+    avg_order_value = 0
+    if result.total_orders and result.total_revenue:
+        avg_order_value = float(result.total_revenue) / int(result.total_orders)
+        
     return {
         "store_id": result.store_id,
         "store_name": result.store_name,
+        "city": result.city or "Unknown",
+        "manager": result.manager_name or "Unknown",
+        "status": result.status or "Unknown",
         "total_revenue": float(result.total_revenue or 0),
-        "total_orders": int(result.total_orders or 0)
+        "total_orders": int(result.total_orders or 0),
+        "total_customers": int(result.total_customers or 0),
+        "average_order_value": round(avg_order_value, 2)
     }
 
 # Mapping tool names to their execution functions
@@ -160,11 +225,26 @@ TOOL_EXECUTORS = {
     "get_store_performance": execute_get_store_performance,
     "get_user_stats": execute_get_user_stats,
     "get_location_counts": execute_get_location_counts,
-    "get_specific_store_performance": execute_get_specific_store_performance
+    "get_specific_store_performance": execute_get_specific_store_performance,
+    "get_daily_sales_trend": execute_get_daily_sales_trend
 }
 
 # OpenAI Tool definitions
 TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_daily_sales_trend",
+            "description": "Get daily revenue and order counts over a specific date range. Useful for trend analysis and finding spikes or dips over time.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "Start date in YYYY-MM-DD format"},
+                    "end_date": {"type": "string", "description": "End date in YYYY-MM-DD format"}
+                }
+            }
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -364,10 +444,12 @@ Use tables when comparing data. Use bullet points where appropriate. Highlight i
 =========================
 CRITICAL INSTRUCTIONS FOR TOOL USAGE (INTERNAL)
 =========================
-1. Today's date is {today_str}.
-2. Whenever a tool requires a date parameter (like start_date or end_date), you MUST use the exact YYYY-MM-DD format (e.g., '2023-10-01').
-3. NEVER use relative dates like 'today', '7 days ago', 'last week', or 'yesterday'. Always calculate and provide the absolute YYYY-MM-DD date using the tools.
-4. If the data returned by a tool is empty or says 0, simply state that no data was found or the value is zero for their permitted scope.
+1. Today's date is {today_str}. You are operating in the current year. NEVER reference past years like 2022 unless explicitly requested by the user.
+2. When the user asks for "all time" or doesn't specify a date, leave the start_date and end_date parameters EMPTY.
+3. Whenever a tool requires a date parameter, you MUST use the exact YYYY-MM-DD format (e.g., '{today_str}'). NEVER pass words like 'today', '30 days ago', or 'last month' as arguments!
+4. If a tool returns 0 or empty, it means there were no sales in that specific date range. Mention the specific date range you queried when reporting zero results so the user knows.
+5. DO NOT rigidly force headers like 'Trend Analysis' or 'Areas Needing Attention' if you do not have the data to support them. Skip them entirely and flow naturally.
+6. When giving recommendations, base them strictly on the data provided (e.g., if average order value is low, suggest upselling).
 """
 
     
